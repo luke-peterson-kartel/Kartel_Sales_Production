@@ -1,0 +1,289 @@
+// Kartel Project Calculator - Database Schema
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+model Client {
+  id            String    @id @default(cuid())
+  name          String
+  website       String?
+  vertical      String    // Automotive, CPG, Fashion, Retail, Health, MediaTech, RealEstate, Entertainment
+  notes         String?
+
+  // Qualification
+  qualified           Boolean   @default(false)
+  qualificationScore  Int       @default(0)
+  dealBehindSpec      Boolean   @default(false)
+
+  // Red Flags (stored as JSON string)
+  redFlags      String?   // JSON array: ["BUDGET_UNDER_600K", "ONE_OFF_ONLY", etc.]
+
+  // Classification
+  classification String   @default("UNDETERMINED") // SYSTEM, PROJECT, UNDETERMINED
+
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  contacts      Contact[]
+  projects      Project[]
+  qualificationCalls QualificationCall[]
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  role      String?  // Decision Maker, Stakeholder, Day-to-Day Contact
+  isPrimary Boolean  @default(false)
+
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Project {
+  id              String    @id @default(cuid())
+  jobId           String    @unique // Format: CLIENT-YYYYMMDD-###
+  name            String
+
+  // Type and Status
+  type            String    // SPEC, STANDARD, ADVANCED
+  status          String    @default("ON_DECK") // ON_DECK, IN_SPEC, IN_PRODUCTION, FINISHING, COMPLETE, CANCELLED
+  currentPartition Int      @default(1) // 1-6 for physical folder position
+
+  // Team Assignments (stored as JSON for flexibility)
+  producer        String?
+  creativeTeam    String?   // JSON array of names
+  loraTeam        String?   // JSON array of names
+  genTeam         String?   // JSON array of names
+  externalArtists String?   // JSON array of names
+
+  // Dates
+  finalDueDate    DateTime?
+
+  // Financials
+  acv             Float?    // Annual Contract Value
+  monthlyFee      Float?
+  estimatedMargin Float?
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  milestones      Milestone[]
+  handoffs        Handoff[]
+  estimates       Estimate[]
+  deliverables    Deliverable[]
+}
+
+model Milestone {
+  id            String    @id @default(cuid())
+  name          String
+  department    String    // Sales, Production, LoRA, GenEngineering
+  order         Int       // For sorting
+
+  // Status
+  completed     Boolean   @default(false)
+  completedAt   DateTime?
+  completedBy   String?
+
+  // Notes
+  notes         String?
+
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// QUALIFICATION & SALES
+// ============================================
+
+model QualificationCall {
+  id          String    @id @default(cuid())
+  callNumber  Int       // 1, 2, 3, or 4
+  callType    String    // INTRO, PRODUCT_SCOPE, BUDGET_SCOPE, PROPOSAL
+
+  // Status
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+
+  // Gate Criteria (stored as JSON)
+  gateCriteria String?  // JSON object with checkbox states
+  gateCleared  Boolean  @default(false)
+
+  // Notes from call
+  notes       String?
+
+  // Discovery answers (for Call 2)
+  discoveryAnswers String? // JSON object
+
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ============================================
+// ESTIMATION
+// ============================================
+
+model Estimate {
+  id              String    @id @default(cuid())
+  name            String    @default("Draft Estimate")
+
+  // Classification
+  requiresLoRA           Boolean @default(false)
+  requiresCustomWorkflow Boolean @default(false)
+  projectType            String  @default("STANDARD") // STANDARD, ADVANCED
+
+  // Calculated Outputs
+  setupDays              Float   @default(0)
+  monthlyGenTeamDays     Float   @default(0)
+  monthlyProductionDays  Float   @default(0)
+  monthlyQCDays          Float   @default(0)
+  monthlyClientReviewDays Float  @default(0)
+
+  // Totals
+  totalMonthlyDays       Float   @default(0)
+  totalAssets            Int     @default(0)
+
+  // Contract Duration
+  contractMonths         Int     @default(12)
+
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Deliverable {
+  id          String    @id @default(cuid())
+
+  // Classification
+  platform    String    // Meta, TikTok, Pinterest, YouTube, OLV, CTV, TV, GIF
+  creativeType String   // Static, Video, Carousel, UGC, Branded, IdeaPin, VideoPin
+  size        String    // 1x1, 9x16, 4x5, 16x9, 2x3, 4x3
+  duration    Int?      // In seconds: 6, 9, 15, 30, 45, 60 (null for static)
+
+  // Volume
+  monthlyCount Int      @default(0)
+  totalCount   Int      @default(0)
+
+  // Calculated effort (days per month)
+  estimatedDays Float   @default(0)
+
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ============================================
+// HANDOFFS
+// ============================================
+
+model Handoff {
+  id            String    @id @default(cuid())
+  handoffNumber Int       // 1, 2, 3, or 4
+  type          String    // SALES_TO_PRODUCTION, PRODUCTION_TO_GENERATIVE, GENERATIVE_TO_PRODUCTION, PRODUCTION_TO_SALES
+
+  // Status
+  status        String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  completedAt   DateTime?
+
+  // Timing compliance
+  dueAt         DateTime?
+  isOnTime      Boolean?
+
+  // Checklist (stored as JSON)
+  checklist     String?   // JSON object with checkbox states
+
+  // Transferred content (stored as JSON)
+  transferredItems String? // JSON array of items transferred
+
+  // Notes
+  notes         String?
+
+  // Email export
+  emailExported Boolean   @default(false)
+  emailExportedAt DateTime?
+
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// REFERENCE DATA
+// ============================================
+
+model Employee {
+  id          String    @id @default(cuid())
+  name        String
+  email       String    @unique
+  title       String
+  department  String    // Sales, Production, Generative, Platform, Management, Community
+  reportsTo   String?
+  level       String    // executive, department_head, manager, Employee
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CostTableTemplate {
+  id              String    @id @default(cuid())
+  name            String
+
+  // Setup costs (in days)
+  dataCaptureDays       Float @default(1)
+  dataParsingDays       Float @default(1)
+  dataCaptioningDays    Float @default(1)
+  loraTrainingDays      Float @default(4)
+  loraValidationDays    Float @default(2)
+  workflowBuildDays     Float @default(2)
+  imageGenerationDays   Float @default(5)
+  videoGenerationDays   Float @default(5)
+
+  // Total setup
+  totalSetupDays        Float @default(21)
+
+  // Per-asset multipliers (days per asset type)
+  staticImageDays       Float @default(0.1)
+  gifDays               Float @default(0.15)
+  shortVideoDays        Float @default(0.2)  // 6-15s
+  mediumVideoDays       Float @default(0.3)  // 30s
+  longVideoDays         Float @default(0.5)  // 45-60s
+
+  isDefault             Boolean @default(false)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
