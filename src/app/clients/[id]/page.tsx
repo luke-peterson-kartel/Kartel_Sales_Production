@@ -11,7 +11,8 @@ import {
   Calendar,
   Phone,
   FileText,
-  Building2
+  Building2,
+  PhoneCall
 } from 'lucide-react';
 import { VERTICALS, RED_FLAGS, QUALIFICATION_CALLS } from '@/lib/constants';
 import ClientActions from './ClientActions';
@@ -85,7 +86,16 @@ export default async function ClientDetailPage({
             </div>
           </div>
 
-          <ClientActions client={client} />
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/clients/${client.id}/prep`}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              <PhoneCall className="h-4 w-4" />
+              Prepare for Call
+            </Link>
+            <ClientActions client={client} />
+          </div>
         </div>
       </div>
 
