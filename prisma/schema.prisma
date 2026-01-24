@@ -40,6 +40,7 @@ model Client {
   contacts      Contact[]
   projects      Project[]
   qualificationCalls QualificationCall[]
+  conversations Conversation[]
 }
 
 model Contact {
@@ -143,8 +144,57 @@ model QualificationCall {
   clientId    String
   client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  conversations Conversation[]
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// ============================================
+// CONVERSATION PROCESSING
+// ============================================
+
+model Conversation {
+  id              String    @id @default(cuid())
+
+  // Raw Input
+  rawTranscript   String    // Full pasted transcript text
+  transcriptSource String   @default("manual") // manual, tactiq, otter, zoom, teams
+
+  // Meeting Metadata (extracted by Claude)
+  meetingDate     DateTime?
+  meetingDuration String?   // e.g., "50 minutes"
+  meetingStage    String?   // Discovery, Test Engagement, Proposal, etc.
+
+  // Participants (stored as JSON)
+  clientAttendees String?   // JSON array: [{name, role, notes, email}]
+  kartelAttendees String?   // JSON array: [{name, role}]
+
+  // Extracted Content (stored as JSON for flexibility)
+  callSummary     String?   // JSON: {accountName, endClient, callType, keyTakeaways, concerns, nextSteps}
+  opportunityData String?   // JSON: {accountInfo, contacts, opportunityDetails, openQuestions, dealSizing}
+  testEngagement  String?   // JSON: {purpose, scope, deliverables, requirements, timeline, successCriteria, risks}
+  followUpEmails  String?   // JSON array: [{emailType, to, cc, subject, body}]
+  internalChecklist String? // JSON: {dataIntake: [], briefReview: [], communicationRhythm: []}
+
+  // Processing Metadata
+  processed       Boolean   @default(false)
+  processedAt     DateTime?
+  processingModel String?   // e.g., "claude-sonnet-4-20250514"
+  processingTokens Int?     // For cost tracking
+  processingError String?   // Store any error message
+
+  // Client Relationship (optional - can be linked later)
+  clientId        String?
+  client          Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  // Link to qualification call if applicable
+  qualificationCallId String?
+  qualificationCall   QualificationCall? @relation(fields: [qualificationCallId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 // ============================================
