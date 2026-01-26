@@ -31,6 +31,13 @@ export async function GET(request: Request) {
             vertical: true,
           },
         },
+        qualificationCalls: {
+          select: {
+            id: true,
+            callNumber: true,
+            callType: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -45,11 +52,19 @@ export async function GET(request: Request) {
   }
 }
 
+// Map call types to their numbers
+const CALL_TYPE_TO_NUMBER: Record<string, number> = {
+  'INTRO': 1,
+  'PRODUCT_SCOPE': 2,
+  'BUDGET_SCOPE': 3,
+  'PROPOSAL': 4,
+};
+
 // POST /api/conversations - Create new conversation
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { rawTranscript, transcriptSource, clientId, qualificationCallId } = body;
+    const { rawTranscript, transcriptSource, clientId, qualificationStages } = body;
 
     if (!rawTranscript || rawTranscript.trim().length < 50) {
       return NextResponse.json(
@@ -58,12 +73,50 @@ export async function POST(request: Request) {
       );
     }
 
+    // If qualification stages are provided and client is linked, find/create QualificationCall records
+    let qualificationCallIds: string[] = [];
+
+    if (clientId && Array.isArray(qualificationStages) && qualificationStages.length > 0) {
+      // For each selected stage, find existing or create new QualificationCall
+      for (const callType of qualificationStages) {
+        const callNumber = CALL_TYPE_TO_NUMBER[callType];
+        if (!callNumber) continue;
+
+        // Try to find existing
+        let call = await prisma.qualificationCall.findFirst({
+          where: {
+            clientId,
+            callType,
+          },
+        });
+
+        // Create if not exists
+        if (!call) {
+          call = await prisma.qualificationCall.create({
+            data: {
+              clientId,
+              callNumber,
+              callType,
+              completed: false,
+            },
+          });
+        }
+
+        qualificationCallIds.push(call.id);
+      }
+    }
+
+    // Build the connect array for qualification calls (many-to-many)
+    const qualificationCallsConnect = qualificationCallIds.length > 0
+      ? { connect: qualificationCallIds.map((id: string) => ({ id })) }
+      : undefined;
+
     const conversation = await prisma.conversation.create({
       data: {
         rawTranscript,
         transcriptSource: transcriptSource || 'manual',
         clientId: clientId || null,
-        qualificationCallId: qualificationCallId || null,
+        qualificationCalls: qualificationCallsConnect,
         processed: false,
       },
       include: {
@@ -71,6 +124,13 @@ export async function POST(request: Request) {
           select: {
             id: true,
             name: true,
+          },
+        },
+        qualificationCalls: {
+          select: {
+            id: true,
+            callNumber: true,
+            callType: true,
           },
         },
       },

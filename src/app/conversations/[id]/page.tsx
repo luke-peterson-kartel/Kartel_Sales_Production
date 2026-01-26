@@ -3,6 +3,8 @@ import Link from 'next/link';
 import prisma from '@/lib/db';
 import { ArrowLeft, AlertCircle, Clock } from 'lucide-react';
 import ConversationView from './ConversationView';
+import ClientLinkSelector from './ClientLinkSelector';
+import QualificationCallSelector from './QualificationCallSelector';
 
 async function getConversation(id: string) {
   const conversation = await prisma.conversation.findUnique({
@@ -14,6 +16,13 @@ async function getConversation(id: string) {
           name: true,
           vertical: true,
           website: true,
+        },
+      },
+      qualificationCalls: {
+        select: {
+          id: true,
+          callNumber: true,
+          callType: true,
         },
       },
     },
@@ -95,14 +104,17 @@ export default async function ConversationDetailPage({
             </div>
           </div>
 
-          {conversation.client && (
-            <Link
-              href={`/clients/${conversation.client.id}`}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              View Client: {conversation.client.name}
-            </Link>
-          )}
+          <div className="flex flex-col gap-2 items-end">
+            <ClientLinkSelector
+              conversationId={conversation.id}
+              currentClient={conversation.client}
+            />
+            <QualificationCallSelector
+              conversationId={conversation.id}
+              clientId={conversation.clientId}
+              currentCalls={conversation.qualificationCalls}
+            />
+          </div>
         </div>
       </div>
 
@@ -135,7 +147,11 @@ export default async function ConversationDetailPage({
       {/* Main Content */}
       {conversation.processed ? (
         <ConversationView
-          conversation={conversation}
+          conversation={{
+            ...conversation,
+            clientId: conversation.clientId,
+          }}
+          client={conversation.client}
           parsedData={parsedData}
         />
       ) : (

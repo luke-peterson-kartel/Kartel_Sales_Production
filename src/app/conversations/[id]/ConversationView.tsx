@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   FileText,
   Building2,
@@ -13,6 +14,8 @@ import {
   Calendar,
   Copy,
   Check,
+  UserPlus,
+  Loader2,
 } from 'lucide-react';
 import type {
   CallSummary,
@@ -30,7 +33,12 @@ interface ConversationViewProps {
     meetingDate: Date | null;
     meetingDuration: string | null;
     meetingStage: string | null;
+    clientId?: string | null;
   };
+  client?: {
+    id: string;
+    name: string;
+  } | null;
   parsedData: {
     clientAttendees: ClientAttendee[];
     kartelAttendees: KartelAttendee[];
@@ -52,10 +60,17 @@ const TABS = [
 
 export default function ConversationView({
   conversation,
+  client,
   parsedData,
 }: ConversationViewProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('summary');
   const [copiedEmail, setCopiedEmail] = useState<number | null>(null);
+  const [importingContacts, setImportingContacts] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   const copyEmail = async (email: FollowUpEmail, index: number) => {
     const text = `To: ${email.to}\n${
@@ -64,6 +79,40 @@ export default function ConversationView({
     await navigator.clipboard.writeText(text);
     setCopiedEmail(index);
     setTimeout(() => setCopiedEmail(null), 2000);
+  };
+
+  const handleImportContacts = async () => {
+    if (!client) return;
+
+    setImportingContacts(true);
+    setImportResult(null);
+
+    try {
+      const response = await fetch(
+        `/api/conversations/${conversation.id}/import-contacts`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: client.id,
+            attendees: parsedData.clientAttendees,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setImportResult({ success: true, message: data.message });
+        router.refresh();
+      } else {
+        setImportResult({ success: false, message: data.error });
+      }
+    } catch (error) {
+      setImportResult({ success: false, message: 'Failed to import contacts' });
+    } finally {
+      setImportingContacts(false);
+    }
   };
 
   const { callSummary, opportunityData, testEngagement, followUpEmails, internalChecklist } =
@@ -134,14 +183,56 @@ export default function ConversationView({
 
             {/* Attendees */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Attendees
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Attendees
+                </h3>
+                {client && parsedData.clientAttendees.length > 0 && (
+                  <button
+                    onClick={handleImportContacts}
+                    disabled={importingContacts}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {importingContacts ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="h-4 w-4" />
+                        Import as Contacts
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* Import Result Message */}
+              {importResult && (
+                <div
+                  className={`mb-4 rounded-lg p-3 text-sm ${
+                    importResult.success
+                      ? 'bg-green-50 text-green-700 border border-green-200'
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}
+                >
+                  {importResult.message}
+                </div>
+              )}
+
+              {/* No client linked warning */}
+              {!client && parsedData.clientAttendees.length > 0 && (
+                <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-700">
+                  Link this conversation to a client to import attendees as contacts.
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">
-                    Client Side
+                    Client Side ({parsedData.clientAttendees.length})
                   </h4>
                   <div className="space-y-2">
                     {parsedData.clientAttendees.map((attendee, i) => (
@@ -152,6 +243,9 @@ export default function ConversationView({
                         <div className="font-medium">{attendee.name}</div>
                         {attendee.role && (
                           <div className="text-gray-500">{attendee.role}</div>
+                        )}
+                        {attendee.email && (
+                          <div className="text-blue-600 text-xs">{attendee.email}</div>
                         )}
                         {attendee.notes && (
                           <div className="text-gray-600 text-xs mt-1">
@@ -164,7 +258,7 @@ export default function ConversationView({
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">
-                    Kartel Team
+                    Kartel Team ({parsedData.kartelAttendees.length})
                   </h4>
                   <div className="space-y-2">
                     {parsedData.kartelAttendees.map((attendee, i) => (

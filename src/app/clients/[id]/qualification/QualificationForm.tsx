@@ -12,8 +12,20 @@ import {
   Target,
   Calendar,
   AlertTriangle,
+  MessageSquare,
+  ExternalLink,
+  Plus,
 } from 'lucide-react';
+import Link from 'next/link';
 import { QUALIFICATION_CALLS } from '@/lib/constants';
+
+interface ConversationSummary {
+  id: string;
+  meetingDate: Date | null;
+  meetingStage: string | null;
+  callSummary: string | null;
+  processed: boolean;
+}
 
 interface QualificationCall {
   id: string;
@@ -25,6 +37,7 @@ interface QualificationCall {
   gateCleared: boolean;
   notes: string | null;
   discoveryAnswers: string | null;
+  conversations?: ConversationSummary[];
 }
 
 interface Client {
@@ -38,6 +51,7 @@ interface Props {
   client: Client;
   existingCalls: QualificationCall[];
   missingCallNumbers: number[];
+  initialExpandedCall?: number | null;
 }
 
 // Gate criteria for each call
@@ -72,10 +86,11 @@ export default function QualificationForm({
   client,
   existingCalls,
   missingCallNumbers,
+  initialExpandedCall,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [expandedCall, setExpandedCall] = useState<number | null>(null);
+  const [expandedCall, setExpandedCall] = useState<number | null>(initialExpandedCall ?? null);
   const [saving, setSaving] = useState<number | null>(null);
 
   // Merge existing calls with call info
@@ -90,6 +105,7 @@ export default function QualificationForm({
       gateCleared: existing?.gateCleared || false,
       notes: existing?.notes || '',
       discoveryAnswers: existing?.discoveryAnswers ? JSON.parse(existing.discoveryAnswers) : {},
+      conversations: existing?.conversations || [],
     };
   });
 
@@ -294,6 +310,63 @@ export default function QualificationForm({
                     rows={4}
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
+                </div>
+
+                {/* Linked Conversations */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Linked Conversations
+                      {call.conversations && call.conversations.length > 0 && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                          {call.conversations.length}
+                        </span>
+                      )}
+                    </h3>
+                    <Link
+                      href={`/conversations/new?clientId=${client.id}`}
+                      className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Conversation
+                    </Link>
+                  </div>
+
+                  {call.conversations && call.conversations.length > 0 ? (
+                    <div className="space-y-2">
+                      {call.conversations.map((conv) => {
+                        const summary = conv.callSummary ? JSON.parse(conv.callSummary) : null;
+                        return (
+                          <Link
+                            key={conv.id}
+                            href={`/conversations/${conv.id}`}
+                            className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`h-2 w-2 rounded-full ${conv.processed ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {summary?.accountName || 'Conversation'}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {conv.meetingDate
+                                    ? new Date(conv.meetingDate).toLocaleDateString()
+                                    : 'No date'}
+                                  {conv.meetingStage && ` • ${conv.meetingStage}`}
+                                </div>
+                              </div>
+                            </div>
+                            <ExternalLink className="h-4 w-4 text-gray-400" />
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                      No conversations linked to this call yet
+                    </div>
+                  )}
                 </div>
 
                 {/* Warning if gates not cleared */}

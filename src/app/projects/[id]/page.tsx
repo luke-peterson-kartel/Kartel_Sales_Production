@@ -157,15 +157,19 @@ export default async function ProjectDetailPage({
                 const existingHandoff = project.handoffs.find(
                   h => h.handoffNumber === handoff.number
                 );
+                const href = existingHandoff
+                  ? `/handoffs/${existingHandoff.id}`
+                  : `/handoffs/new?projectId=${project.id}&handoffNumber=${handoff.number}`;
                 return (
-                  <div
+                  <Link
                     key={handoff.number}
-                    className={`flex items-center gap-4 rounded-lg border p-4 ${
+                    href={href}
+                    className={`flex items-center gap-4 rounded-lg border p-4 transition-colors ${
                       existingHandoff?.status === 'COMPLETED'
-                        ? 'bg-green-50 border-green-200'
+                        ? 'bg-green-50 border-green-200 hover:bg-green-100'
                         : existingHandoff?.status === 'IN_PROGRESS'
-                        ? 'bg-blue-50 border-blue-200'
-                        : 'bg-gray-50 border-gray-200'
+                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                     }`}
                   >
                     <div
@@ -191,15 +195,10 @@ export default async function ProjectDetailPage({
                         {handoff.timing} - {handoff.description}
                       </div>
                     </div>
-                    {existingHandoff && (
-                      <Link
-                        href={`/handoffs/${existingHandoff.id}`}
-                        className="text-sm text-blue-600 hover:text-blue-700"
-                      >
-                        View
-                      </Link>
-                    )}
-                  </div>
+                    <span className="text-sm text-blue-600">
+                      {existingHandoff ? 'View' : 'Create'}
+                    </span>
+                  </Link>
                 );
               })}
             </div>

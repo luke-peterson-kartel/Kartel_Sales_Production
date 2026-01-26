@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
         client: {
           select: { id: true, name: true },
         },
+        handoffs: {
+          select: { handoffNumber: true },
+        },
         _count: {
           select: { handoffs: true, deliverables: true },
         },

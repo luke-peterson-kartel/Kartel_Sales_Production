@@ -13,6 +13,18 @@ export async function GET(
     const calls = await prisma.qualificationCall.findMany({
       where: { clientId: id },
       orderBy: { callNumber: 'asc' },
+      include: {
+        conversations: {
+          select: {
+            id: true,
+            meetingDate: true,
+            meetingStage: true,
+            callSummary: true,
+            processed: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     });
 
     return NextResponse.json(calls);

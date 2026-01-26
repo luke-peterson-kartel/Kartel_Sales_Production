@@ -9,25 +9,37 @@ import {
   CheckCircle2,
   Plus,
   Calendar,
-  Phone,
   FileText,
-  Building2,
-  PhoneCall
+  PhoneCall,
+  MessageSquare,
 } from 'lucide-react';
 import { VERTICALS, RED_FLAGS, QUALIFICATION_CALLS } from '@/lib/constants';
 import ClientActions from './ClientActions';
+import ClientIntelligenceSection from '@/components/clients/ClientIntelligenceSection';
+import ContactsList from '@/components/contacts/ContactsList';
 
 async function getClient(id: string) {
   const client = await prisma.client.findUnique({
     where: { id },
     include: {
-      contacts: true,
+      contacts: {
+        orderBy: [
+          { seniorityScore: 'desc' },
+          { isPrimary: 'desc' },
+          { name: 'asc' },
+        ],
+      },
       projects: {
         orderBy: { createdAt: 'desc' },
       },
       qualificationCalls: {
         orderBy: { callNumber: 'asc' },
       },
+      conversations: {
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      },
+      intelligence: true,
     },
   });
 
@@ -102,6 +114,25 @@ export default async function ClientDetailPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Company Intelligence */}
+          <ClientIntelligenceSection
+            clientId={client.id}
+            clientName={client.name}
+            websiteUrl={client.website}
+            vertical={client.vertical}
+            existingIntelligence={client.intelligence ? {
+              companyDescription: client.intelligence.companyDescription ?? undefined,
+              companySize: client.intelligence.companySize ?? undefined,
+              estimatedEmployees: client.intelligence.estimatedEmployees ?? undefined,
+              industry: client.intelligence.industry ?? undefined,
+              leadershipTeam: client.intelligence.leadershipTeam ? JSON.parse(client.intelligence.leadershipTeam) : [],
+              currentCreativeApproach: client.intelligence.currentCreativeApproach ?? undefined,
+              suggestedTalkingPoints: client.intelligence.suggestedTalkingPoints ? JSON.parse(client.intelligence.suggestedTalkingPoints) : [],
+              suggestedQuestions: client.intelligence.suggestedQuestions ? JSON.parse(client.intelligence.suggestedQuestions) : [],
+              websiteAnalyzedAt: client.intelligence.websiteAnalyzedAt,
+            } : null}
+          />
+
           {/* Classification & Status */}
           <div className="rounded-xl bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Classification</h2>
@@ -172,10 +203,11 @@ export default async function ClientDetailPage({
                   c => c.callNumber === call.number && c.completed
                 );
                 return (
-                  <div
+                  <Link
                     key={call.number}
-                    className={`flex items-center gap-4 rounded-lg border p-4 ${
-                      completed ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                    href={`/clients/${client.id}/qualification?call=${call.number}`}
+                    className={`flex items-center gap-4 rounded-lg border p-4 transition-colors hover:shadow-md ${
+                      completed ? 'bg-green-50 border-green-200 hover:bg-green-100' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                     }`}
                   >
                     <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
@@ -197,7 +229,7 @@ export default async function ClientDetailPage({
                         {new Date(completed.completedAt!).toLocaleDateString()}
                       </div>
                     )}
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -243,6 +275,64 @@ export default async function ClientDetailPage({
             )}
           </div>
 
+          {/* Conversations */}
+          <div className="rounded-xl bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Conversations ({client.conversations.length})
+              </h2>
+              <Link
+                href={`/conversations/new?clientId=${client.id}`}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                New Conversation
+              </Link>
+            </div>
+            {client.conversations.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <MessageSquare className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                <p>No conversations linked</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {client.conversations.map((conversation) => (
+                  <Link
+                    key={conversation.id}
+                    href={`/conversations/${conversation.id}`}
+                    className="block rounded-lg border border-gray-200 p-4 hover:bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <MessageSquare className="h-5 w-5 text-gray-400" />
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {conversation.meetingDate
+                              ? new Date(conversation.meetingDate).toLocaleDateString()
+                              : 'Conversation'}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {conversation.meetingStage || conversation.transcriptSource}
+                            {conversation.meetingDuration && ` • ${conversation.meetingDuration}`}
+                          </div>
+                        </div>
+                      </div>
+                      {conversation.processed ? (
+                        <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          Processed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Notes */}
           {client.notes && (
             <div className="rounded-xl bg-white p-6 shadow-sm">
@@ -281,48 +371,11 @@ export default async function ClientDetailPage({
 
           {/* Contacts */}
           <div className="rounded-xl bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-500">Contacts</h3>
-              <Link
-                href={`/clients/${client.id}/contacts/new`}
-                className="text-sm text-blue-600 hover:text-blue-700"
-              >
-                Add Contact
-              </Link>
-            </div>
-            {client.contacts.length === 0 ? (
-              <div className="text-center py-4 text-gray-500">
-                <Building2 className="mx-auto h-6 w-6 mb-2 opacity-50" />
-                <p className="text-sm">No contacts yet</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {client.contacts.map((contact) => (
-                  <div key={contact.id} className="text-sm">
-                    <div className="font-medium text-gray-900">
-                      {contact.name}
-                      {contact.isPrimary && (
-                        <span className="ml-2 text-xs text-blue-600">(Primary)</span>
-                      )}
-                    </div>
-                    {contact.role && (
-                      <div className="text-gray-500">{contact.role}</div>
-                    )}
-                    {contact.email && (
-                      <a href={`mailto:${contact.email}`} className="text-blue-600 hover:underline">
-                        {contact.email}
-                      </a>
-                    )}
-                    {contact.phone && (
-                      <div className="flex items-center gap-1 text-gray-500">
-                        <Phone className="h-3 w-3" />
-                        {contact.phone}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <ContactsList
+              contacts={client.contacts}
+              clientId={client.id}
+              clientName={client.name}
+            />
           </div>
 
           {/* Timeline */}

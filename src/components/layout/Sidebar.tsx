@@ -29,10 +29,13 @@ export function Sidebar() {
   return (
     <div className="flex h-screen w-64 flex-col bg-gray-900">
       {/* Logo */}
-      <div className="flex h-16 items-center justify-center border-b border-gray-800">
-        <h1 className="text-xl font-bold text-white">
-          <span className="text-blue-400">KARTEL</span> Project Calculator
-        </h1>
+      <div className="flex h-16 flex-col justify-center border-b border-gray-800 px-4">
+        <img
+          src="/kartel-logo.png"
+          alt="Kartel"
+          className="h-5 w-auto"
+        />
+        <span className="text-xs font-medium tracking-wider text-gray-400 mt-1">SALES PROD</span>
       </div>
 
       {/* Navigation */}

@@ -20,7 +20,7 @@ export async function GET(
             website: true,
           },
         },
-        qualificationCall: {
+        qualificationCalls: {
           select: {
             id: true,
             callNumber: true,
@@ -112,8 +112,14 @@ export async function PUT(
     if (body.clientId !== undefined) {
       updateData.clientId = body.clientId;
     }
-    if (body.qualificationCallId !== undefined) {
-      updateData.qualificationCallId = body.qualificationCallId;
+
+    // Handle qualification calls (many-to-many) - set to replace all connections
+    if (body.qualificationCallIds !== undefined) {
+      updateData.qualificationCalls = {
+        set: Array.isArray(body.qualificationCallIds)
+          ? body.qualificationCallIds.map((callId: string) => ({ id: callId }))
+          : [],
+      };
     }
 
     const conversation = await prisma.conversation.update({
@@ -124,6 +130,13 @@ export async function PUT(
           select: {
             id: true,
             name: true,
+          },
+        },
+        qualificationCalls: {
+          select: {
+            id: true,
+            callNumber: true,
+            callType: true,
           },
         },
       },

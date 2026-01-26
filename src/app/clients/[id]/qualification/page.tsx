@@ -11,6 +11,18 @@ async function getClient(id: string) {
     include: {
       qualificationCalls: {
         orderBy: { callNumber: 'asc' },
+        include: {
+          conversations: {
+            select: {
+              id: true,
+              meetingDate: true,
+              meetingStage: true,
+              callSummary: true,
+              processed: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
       },
       contacts: true,
     },
@@ -21,11 +33,15 @@ async function getClient(id: string) {
 
 export default async function QualificationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ call?: string }>;
 }) {
   const { id } = await params;
+  const { call } = await searchParams;
   const client = await getClient(id);
+  const initialExpandedCall = call ? parseInt(call, 10) : null;
 
   if (!client) {
     notFound();
@@ -86,6 +102,7 @@ export default async function QualificationPage({
         client={client}
         existingCalls={client.qualificationCalls}
         missingCallNumbers={missingCalls.map(c => c.number)}
+        initialExpandedCall={initialExpandedCall}
       />
     </div>
   );

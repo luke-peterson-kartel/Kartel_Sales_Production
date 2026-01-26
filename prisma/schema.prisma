@@ -41,6 +41,7 @@ model Client {
   projects      Project[]
   qualificationCalls QualificationCall[]
   conversations Conversation[]
+  intelligence  ClientIntelligence?
 }
 
 model Contact {
@@ -51,7 +52,86 @@ model Contact {
   role      String?  // Decision Maker, Stakeholder, Day-to-Day Contact
   isPrimary Boolean  @default(false)
 
+  // Job Intelligence
+  jobTitle          String?   // Exact title: "VP Marketing", "Creative Director"
+  headline          String?   // LinkedIn headline
+  department        String?   // MARKETING, CREATIVE, EXECUTIVE, PROCUREMENT, IT, OPERATIONS, FINANCE, SALES, OTHER
+  seniority         String?   // C_LEVEL, VP, DIRECTOR, MANAGER, INDIVIDUAL_CONTRIBUTOR
+  seniorityScore    Int?      // 1-10 scale for sorting (C_LEVEL=10, VP=8, DIRECTOR=6, MANAGER=4, IC=2)
+
+  // Decision Authority
+  decisionAuthority String?   // DECISION_MAKER, BUDGET_HOLDER, INFLUENCER, END_USER, GATEKEEPER
+  buyingRole        String?   // CHAMPION, ECONOMIC_BUYER, TECHNICAL_BUYER, USER_BUYER, COACH
+
+  // Social & Profile Links
+  linkedInUrl       String?
+  twitterUrl        String?
+  githubUrl         String?
+  facebookUrl       String?
+  photoUrl          String?   // Profile photo URL
+
+  // Location
+  city              String?
+  state             String?
+  country           String?
+
+  // Employment History (from Apollo)
+  employmentHistory String?   // JSON: [{organization_name, title, start_date, end_date, current}]
+
+  // Email Verification
+  emailStatus       String?   // verified, guessed, unavailable, etc.
+
+  // Enrichment Data
+  enrichedAt        DateTime?
+  enrichmentSource  String?   // WEBSITE_ANALYSIS, APOLLO, MANUAL, CONVERSATION
+  enrichmentData    String?   // JSON: raw enrichment response for reference
+
+  // Engagement Tracking
+  lastContactedAt   DateTime?
+  engagementScore   Int?      // Based on meeting attendance, email responses
+  notes             String?   // Contact-specific notes
+
   clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ClientIntelligence {
+  id        String   @id @default(cuid())
+
+  // Company Intelligence (extracted from website)
+  companyDescription    String?   // What the company does
+  companySize           String?   // STARTUP, SMB, MID_MARKET, ENTERPRISE
+  estimatedEmployees    String?   // "50-100", "1000+"
+  estimatedRevenue      String?   // Revenue range if known
+  industry              String?   // More specific than vertical
+
+  // Leadership/Team Data (extracted from website)
+  leadershipTeam        String?   // JSON: [{name, title, linkedIn?, isLikelyDM?}]
+  keyContacts           String?   // JSON: Potential contacts found on website
+
+  // Marketing/Creative Intel
+  currentCreativeApproach String? // What their current advertising/creative looks like
+  brandGuidelines       String?   // Any brand info found
+  socialPresence        String?   // JSON: {platforms: [], followers: {}}
+  competitors           String?   // JSON: Known competitors
+
+  // Talking Points (AI-generated suggestions)
+  suggestedTalkingPoints String?  // JSON: Based on their creative approach
+  suggestedQuestions    String?   // JSON: Discovery questions for this client
+
+  // Analysis Metadata
+  websiteAnalyzedAt     DateTime?
+  websiteUrl            String?   // URL that was analyzed
+  websiteContent        String?   // Cached relevant website text (truncated)
+  analysisModel         String?   // Claude model used
+  analysisTokens        Int?
+  analysisError         String?   // Store any error message
+
+  // Client Relationship (one-to-one)
+  clientId  String   @unique
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
@@ -188,9 +268,8 @@ model Conversation {
   clientId        String?
   client          Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  // Link to qualification call if applicable
-  qualificationCallId String?
-  qualificationCall   QualificationCall? @relation(fields: [qualificationCallId], references: [id], onDelete: SetNull)
+  // Link to qualification calls (many-to-many - a conversation can cover multiple stages)
+  qualificationCalls QualificationCall[]
 
   // Timestamps
   createdAt       DateTime  @default(now())
@@ -224,6 +303,9 @@ model Estimate {
   // Contract Duration
   contractMonths         Int     @default(12)
 
+  // Estimate's own deliverables (separate from project deliverables)
+  deliverables  EstimateDeliverable[]
+
   projectId     String
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -231,6 +313,30 @@ model Estimate {
   updatedAt     DateTime  @updatedAt
 }
 
+// Deliverables that belong to a specific Estimate
+model EstimateDeliverable {
+  id            String    @id @default(cuid())
+
+  // Classification
+  platform      String    // Meta, TikTok, Pinterest, YouTube, OLV, CTV, TV, GIF
+  creativeType  String    // Static, Video, Carousel, UGC, Branded, IdeaPin, VideoPin
+  size          String    // 1x1, 9x16, 4x5, 16x9, 2x3, 4x3
+  duration      Int?      // In seconds: 6, 9, 15, 30, 45, 60 (null for static)
+
+  // Volume
+  monthlyCount  Int       @default(0)
+
+  // Calculated effort (days per month)
+  estimatedDays Float     @default(0)
+
+  estimateId    String
+  estimate      Estimate  @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Project's accepted/active deliverables (set when estimate is "applied")
 model Deliverable {
   id          String    @id @default(cuid())
 
@@ -313,6 +419,11 @@ model CostTableTemplate {
   name            String
 
   // Setup costs (in days)
+  baseSetupDays         Float @default(7)   // Default setup for standard projects
+  loraSetupDays         Float @default(21)  // Setup days when LoRA is required
+  customWorkflowDays    Float @default(14)  // Setup days for custom workflow
+
+  // Legacy setup costs (kept for reference)
   dataCaptureDays       Float @default(1)
   dataParsingDays       Float @default(1)
   dataCaptioningDays    Float @default(1)
@@ -321,16 +432,20 @@ model CostTableTemplate {
   workflowBuildDays     Float @default(2)
   imageGenerationDays   Float @default(5)
   videoGenerationDays   Float @default(5)
-
-  // Total setup
   totalSetupDays        Float @default(21)
 
   // Per-asset multipliers (days per asset type)
-  staticImageDays       Float @default(0.1)
-  gifDays               Float @default(0.15)
-  shortVideoDays        Float @default(0.2)  // 6-15s
-  mediumVideoDays       Float @default(0.3)  // 30s
-  longVideoDays         Float @default(0.5)  // 45-60s
+  staticImageDays       Float @default(0.1)   // Static images, carousels
+  gifDays               Float @default(0.15)  // Animated GIFs
+  shortVideoDays        Float @default(0.2)   // Videos 6-15 seconds
+  mediumVideoDays       Float @default(0.3)   // Videos 16-30 seconds
+  longVideoDays         Float @default(0.5)   // Videos 31-60 seconds
+
+  // Team effort allocation (percentages as decimals, should sum to 1.0)
+  genTeamPercent        Float @default(0.4)   // Gen team allocation (40%)
+  productionPercent     Float @default(0.3)   // Production team allocation (30%)
+  qcPercent             Float @default(0.2)   // QC team allocation (20%)
+  clientReviewPercent   Float @default(0.1)   // Client review allocation (10%)
 
   isDefault             Boolean @default(false)
 
