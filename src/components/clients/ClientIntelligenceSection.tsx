@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Sparkles,
   Globe,
@@ -13,6 +14,9 @@ import {
   ExternalLink,
   Crown,
   Star,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import type { LeadershipMember } from '@/lib/types/contact-intelligence';
 
@@ -41,14 +45,51 @@ export default function ClientIntelligenceSection({
   vertical,
   existingIntelligence,
 }: ClientIntelligenceProps) {
+  const router = useRouter();
   const [intelligence, setIntelligence] = useState(existingIntelligence);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTalkingPoints, setShowTalkingPoints] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
 
+  // Website editing state
+  const [isEditingWebsite, setIsEditingWebsite] = useState(false);
+  const [editedWebsite, setEditedWebsite] = useState(websiteUrl || '');
+  const [isSavingWebsite, setIsSavingWebsite] = useState(false);
+  const [currentWebsiteUrl, setCurrentWebsiteUrl] = useState(websiteUrl);
+
+  const handleSaveWebsite = async () => {
+    setIsSavingWebsite(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/clients/${clientId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ website: editedWebsite || null }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save website');
+      }
+
+      setCurrentWebsiteUrl(editedWebsite || null);
+      setIsEditingWebsite(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save website');
+    } finally {
+      setIsSavingWebsite(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditedWebsite(currentWebsiteUrl || '');
+    setIsEditingWebsite(false);
+  };
+
   const analyzeWebsite = async () => {
-    if (!websiteUrl) {
+    if (!currentWebsiteUrl) {
       setError('No website URL configured for this client');
       return;
     }
@@ -100,7 +141,7 @@ export default function ClientIntelligenceSection({
           <Sparkles className="h-5 w-5 text-purple-500" />
           Company Intelligence
         </h2>
-        {websiteUrl && (
+        {currentWebsiteUrl && (
           <button
             onClick={analyzeWebsite}
             disabled={isAnalyzing}
@@ -132,14 +173,82 @@ export default function ClientIntelligenceSection({
         </div>
       )}
 
-      {!websiteUrl && (
-        <div className="text-center py-6 text-gray-500">
-          <Globe className="mx-auto h-8 w-8 mb-2 opacity-50" />
-          <p className="text-sm">Add a website URL to enable intelligence analysis</p>
+      {/* Website URL Section */}
+      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <Globe className="h-4 w-4" />
+            Website
+          </div>
+          {!isEditingWebsite && (
+            <button
+              onClick={() => setIsEditingWebsite(true)}
+              className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
+              <Pencil className="h-3 w-3" />
+              {currentWebsiteUrl ? 'Edit' : 'Add'}
+            </button>
+          )}
+        </div>
+
+        {isEditingWebsite ? (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="url"
+              value={editedWebsite}
+              onChange={(e) => setEditedWebsite(e.target.value)}
+              placeholder="https://example.com"
+              className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              disabled={isSavingWebsite}
+            />
+            <button
+              onClick={handleSaveWebsite}
+              disabled={isSavingWebsite}
+              className="p-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+              title="Save"
+            >
+              {isSavingWebsite ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              disabled={isSavingWebsite}
+              className="p-1.5 rounded-md bg-gray-200 text-gray-600 hover:bg-gray-300 disabled:opacity-50"
+              title="Cancel"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="mt-1">
+            {currentWebsiteUrl ? (
+              <a
+                href={currentWebsiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+              >
+                {currentWebsiteUrl}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : (
+              <p className="text-sm text-gray-400 italic">No website configured</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!currentWebsiteUrl && !isEditingWebsite && (
+        <div className="text-center py-4 text-gray-500">
+          <Sparkles className="mx-auto h-8 w-8 mb-2 opacity-50" />
+          <p className="text-sm">Add a website URL above to enable intelligence analysis</p>
         </div>
       )}
 
-      {websiteUrl && !hasIntelligence && !isAnalyzing && (
+      {currentWebsiteUrl && !hasIntelligence && !isAnalyzing && (
         <div className="text-center py-6 text-gray-500">
           <Sparkles className="mx-auto h-8 w-8 mb-2 opacity-50" />
           <p className="text-sm mb-3">Click "Analyze Website" to extract company intelligence</p>

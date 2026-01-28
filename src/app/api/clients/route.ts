@@ -5,9 +5,26 @@ export async function GET() {
   try {
     const clients = await prisma.client.findMany({
       orderBy: { updatedAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        website: true,
+        vertical: true,
+        classification: true,
+        qualified: true,
+        qualificationScore: true,
+        // Sales Pipeline fields
+        dealOwner: true,
+        salesStage: true,
+        dealValue: true,
+        nextStepNotes: true,
+        lastImportedAt: true,
+        // Counts
         _count: {
-          select: { projects: true },
+          select: {
+            projects: true,
+            salesTasks: true,
+          },
         },
       },
     });

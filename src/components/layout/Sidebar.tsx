@@ -11,6 +11,8 @@ import {
   ArrowRightLeft,
   FileText,
   Settings,
+  TrendingUp,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 const navigation = [
@@ -20,6 +22,8 @@ const navigation = [
   { name: 'Projects', href: '/projects', icon: FolderKanban },
   { name: 'Estimates', href: '/estimates', icon: Calculator },
   { name: 'Handoffs', href: '/handoffs', icon: ArrowRightLeft },
+  { name: 'Cash Visualizer', href: '/tools/cash-visualizer', icon: TrendingUp },
+  { name: 'Sales Report', href: '/sales-report/import', icon: FileSpreadsheet },
   { name: 'Print Forms', href: '/print', icon: FileText },
 ];
 

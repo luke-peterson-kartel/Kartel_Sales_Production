@@ -18,6 +18,15 @@ export async function GET(
         qualificationCalls: {
           orderBy: { callNumber: 'asc' },
         },
+        salesTasks: {
+          orderBy: [{ completed: 'asc' }, { dueDate: 'asc' }],
+        },
+        subDeals: {
+          select: { id: true, name: true, dealValue: true, salesStage: true },
+        },
+        parentClient: {
+          select: { id: true, name: true },
+        },
       },
     });
 
@@ -46,7 +55,21 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const { name, website, vertical, notes, classification, dealBehindSpec, redFlags, qualified } = body;
+    const {
+      name,
+      website,
+      vertical,
+      notes,
+      classification,
+      dealBehindSpec,
+      redFlags,
+      qualified,
+      // Sales pipeline fields
+      dealOwner,
+      salesStage,
+      dealValue,
+      nextStepNotes,
+    } = body;
 
     // Parse red flags if needed
     const parsedRedFlags = typeof redFlags === 'string' ? JSON.parse(redFlags) : redFlags || [];
@@ -68,6 +91,11 @@ export async function PUT(
         redFlags: JSON.stringify(parsedRedFlags),
         qualified: qualified !== undefined ? qualified : (!hasCriticalFlags && parsedRedFlags.length === 0),
         qualificationScore: calculateQualificationScore(parsedRedFlags, classification, dealBehindSpec),
+        // Sales pipeline fields (only update if provided)
+        ...(dealOwner !== undefined && { dealOwner }),
+        ...(salesStage !== undefined && { salesStage }),
+        ...(dealValue !== undefined && { dealValue: dealValue ? parseFloat(dealValue) : null }),
+        ...(nextStepNotes !== undefined && { nextStepNotes }),
       },
     });
 

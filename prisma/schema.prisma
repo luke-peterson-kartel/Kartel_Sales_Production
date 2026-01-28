@@ -32,6 +32,18 @@ model Client {
   // Classification
   classification String   @default("UNDETERMINED") // SYSTEM, PROJECT, UNDETERMINED
 
+  // Sales Pipeline (from Daily Sales Report)
+  dealOwner         String?   // Ben, Luke, Emmet, Kevin
+  salesStage        String?   // DISCOVERY, SCOPING, SPEC_PRODUCTION, NEGOTIATION, PROPOSAL_SENT, CLOSED_WON, CLOSED_LOST
+  dealValue         Float?    // Pipeline value in dollars
+  nextStepNotes     String?   // Free-text next step from sales report
+  lastImportedAt    DateTime? // When last updated from sales report PDF
+
+  // Sub-deal relationship (e.g., "Saatchi (Toyota)" parent -> "Saatchi Lexus" child)
+  parentClientId    String?
+  parentClient      Client?   @relation("SubDeals", fields: [parentClientId], references: [id])
+  subDeals          Client[]  @relation("SubDeals")
+
   // Timestamps
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -42,6 +54,7 @@ model Client {
   qualificationCalls QualificationCall[]
   conversations Conversation[]
   intelligence  ClientIntelligence?
+  salesTasks    SalesTask[]
 }
 
 model Contact {
@@ -90,6 +103,10 @@ model Contact {
   lastContactedAt   DateTime?
   engagementScore   Int?      // Based on meeting attendance, email responses
   notes             String?   // Contact-specific notes
+
+  // Lead Tracking (from Daily Sales Report)
+  leadStatus        String?   // LEAD, CONNECTED, OPEN_DEAL, CONVERTED_TO_DEAL
+  leadOwner         String?   // Sales owner for this lead
 
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -395,6 +412,53 @@ model Handoff {
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// SALES PIPELINE & TASKS
+// ============================================
+
+model SalesTask {
+  id          String    @id @default(cuid())
+  description String    // "Schedule Garage mtg", "Send proposal"
+  dueDate     DateTime?
+  status      String    @default("OPEN") // OPEN, IN_PROGRESS, COMPLETED
+  completed   Boolean   @default(false) // Kept for backwards compatibility
+  completedAt DateTime?
+  owner       String?   // Sales owner responsible for task
+  isOverdue   Boolean   @default(false)
+  priority    String    @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model SalesReportImport {
+  id            String    @id @default(cuid())
+  fileName      String    // Original PDF file name
+  reportDate    DateTime  // Date the report covers
+  importedAt    DateTime  @default(now())
+  importedBy    String?   // Who triggered the import
+
+  // Import Statistics
+  dealsImported   Int     @default(0)
+  dealsUpdated    Int     @default(0)
+  dealsCreated    Int     @default(0)
+  leadsImported   Int     @default(0)
+  tasksCreated    Int     @default(0)
+  meetingsFound   Int     @default(0)
+
+  // Raw extraction for debugging/auditing
+  rawExtraction   String? // JSON of parsed data before import
+
+  // Import errors/warnings
+  errors          String? // JSON array of error messages
+  warnings        String? // JSON array of warning messages
+
+  createdAt     DateTime  @default(now())
 }
 
 // ============================================
